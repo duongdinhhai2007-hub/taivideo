@@ -442,3 +442,4 @@ button:disabled { opacity: .6; cursor: not-allowed; }
   .history-item { flex-direction: column; align-items: flex-start; }
   .history-item small { max-width: 78vw; }
 }
+#adminOpen { display: none !important; }
