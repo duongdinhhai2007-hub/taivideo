@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TaiVideo - All in One Downloader</title>
+  <meta name="description" content="Website tải video và hình ảnh đa nền tảng: TikTok, YouTube, Instagram, Facebook, X, Bilibili và nhiều hơn nữa.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ========== THANH ĐẦU TRANG ========== -->
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="logo" href="#home">
+        <span class="logo-icon">↓</span>
+        <span>TaiVideo</span>
+      </a>
+
+      <nav class="nav">
+        <a href="#home" data-i18n="home">Trang chủ</a>
+        <a href="#platforms" data-i18n="platforms">Nền tảng</a>
+        <a href="#history" data-i18n="history">Lịch sử</a>
+      </nav>
+
+      <div class="topbar-actions">
+        <select id="language" aria-label="Ngôn ngữ">
+          <option value="vi">Tiếng Việt</option>
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+
+        <a class="contact-admin"
+           href="https://zalo.me/0862732490"
+           target="_blank"
+           rel="noopener noreferrer">
+          <span>💬</span>
+          <span>
+            <small>LIÊN HỆ CÔNG VIỆC</small>
+            <strong>Zalo Admin Dương Đình Hải</strong>
+            <b>0862732490</b>
+          </span>
+        </a>
+
+        <button id="adminOpen" class="btn-ghost" type="button">⚙ Quản trị</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ========== PHẦN CHÍNH: DÁN LINK ========== -->
+    <section id="home" class="hero">
+      <div class="container">
+        <h1 data-i18n="headline">Tải video &amp; ảnh <span>siêu dễ dàng</span></h1>
+        <p class="subtitle" data-i18n="subtitle">Tải nội dung yêu thích từ các nền tảng phổ biến.</p>
+
+        <div class="card downloader">
+          <h2 data-i18n="pasteTitle">Dán liên kết của bạn</h2>
+
+          <div class="input-row">
+            <input id="videoUrl" type="url" inputmode="url" autocomplete="off"
+                   placeholder="https://www.tiktok.com/@user/video/...">
+            <button id="clearUrl" class="btn-clear" type="button" aria-label="Xóa liên kết">✕</button>
+          </div>
+
+          <div id="detected" class="detected">Chưa nhận diện nền tảng</div>
+
+          <button id="analyzeBtn" class="btn-primary" type="button">↓ <span data-i18n="analyze">PHÂN TÍCH LIÊN KẾT</span></button>
+          <p id="message" class="message" role="status"></p>
+
+          <div id="result" class="result hidden">
+            <div class="result-head">
+              <span class="result-badge">KẾT QUẢ</span>
+              <strong id="resultPlatform"></strong>
+            </div>
+
+            <label class="field-label" for="quality">Chất lượng</label>
+            <select id="quality">
+              <option value="1080">1080p Full HD</option>
+              <option value="720">720p HD</option>
+              <option value="480">480p</option>
+              <option value="audio">Chỉ âm thanh (MP3)</option>
+            </select>
+
+            <button id="downloadBtn" class="btn-primary" type="button">↓ TẢI XUỐNG</button>
+            <p id="downloadMessage" class="message" role="status"></p>
+          </div>
+        </div>
+
+        <p class="legal-note">
+          Chỉ tải nội dung của chính bạn hoặc nội dung được phép sử dụng.
+        </p>
+      </div>
+    </section>
+
+    <!-- ========== NỀN TẢNG HỖ TRỢ ========== -->
+    <section id="platforms" class="section">
+      <div class="container">
+        <h2 class="section-title" data-i18n="platformTitle">Nền tảng hỗ trợ</h2>
+        <div id="platformGrid" class="platform-grid"></div>
+      </div>
+    </section>
+
+    <!-- ========== TẠI SAO CHỌN ========== -->
+    <section id="why" class="section section-alt">
+      <div class="container">
+        <h2 class="section-title" data-i18n="whyTitle">Tại sao chọn TaiVideo?</h2>
+        <div class="features">
+          <div class="feature">
+            <span class="feature-icon">⚡</span>
+            <h3>Nhanh chóng</h3>
+            <p>Dán link, chọn chất lượng và tải xuống chỉ trong vài giây.</p>
+          </div>
+          <div class="feature">
+            <span class="feature-icon">🌐</span>
+            <h3>Đa nền tảng</h3>
+            <p>Hỗ trợ TikTok, YouTube, Instagram, Facebook, X, Bilibili và nhiều nền tảng khác.</p>
+          </div>
+          <div class="feature">
+            <span class="feature-icon">🔒</span>
+            <h3>Riêng tư</h3>
+            <p>Không cần đăng ký tài khoản, lịch sử chỉ lưu trên trình duyệt của bạn.</p>
+          </div>
+          <div class="feature">
+            <span class="feature-icon">📱</span>
+            <h3>Mọi thiết bị</h3>
+            <p>Giao diện thích ứng, dùng tốt trên điện thoại, máy tính bảng và máy tính.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== LỊCH SỬ ========== -->
+    <section id="history" class="section">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title" data-i18n="historyTitle">Lịch sử tải xuống</h2>
+          <button id="clearHistory" class="btn-ghost" type="button">🗑 Xóa lịch sử</button>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========== CHÂN TRANG ========== -->
+  <footer class="footer">
+    <div class="container">
+      <p class="copyright">Trang web thuộc bản quyền Dương Đình Hải</p>
+      <p class="footer-contact">Liên hệ công việc: <a href="mailto:dinhhai08072007@gmail.com">dinhhai08072007@gmail.com</a> hoặc Zalo <a href="https://zalo.me/0862732490" target="_blank" rel="noopener noreferrer">0862732490</a> (Dương Đình Hải)</p>
+    </div>
+  </footer>
+
+  <!-- ========== CỬA SỔ QUẢN TRỊ ========== -->
+  <div id="adminModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Quản trị">
+    <div class="modal-box">
+      <button id="adminClose" class="modal-close" type="button" aria-label="Đóng">✕</button>
+      <h2>Quản trị</h2>
+
+      <div id="adminLogin">
+        <label class="field-label" for="adminPassword">Mật khẩu</label>
+        <input id="adminPassword" type="password" placeholder="Nhập mật khẩu" autocomplete="off">
+        <button id="loginBtn" class="btn-primary" type="button">Đăng nhập</button>
+        <p id="loginError" class="error"></p>
+      </div>
+
+      <div id="adminPanel" class="hidden">
+        <div class="stats">
+          <div class="stat"><b id="totalHistory">0</b><span>Lượt tải</span></div>
+          <div class="stat"><b id="platformCount">0</b><span>Nền tảng</span></div>
+        </div>
+
+        <label class="field-label" for="siteName">Tên website</label>
+        <input id="siteName" type="text" placeholder="TaiVideo">
+
+        <label class="field-label" for="apiEndpoint">API endpoint</label>
+        <input id="apiEndpoint" type="text" placeholder="/api/download">
+
+        <div class="modal-actions">
+          <button id="saveSettings" class="btn-primary" type="button">Lưu cài đặt</button>
+          <button id="logoutBtn" class="btn-ghost" type="button">Đăng xuất</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
