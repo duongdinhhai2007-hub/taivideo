@@ -5,7 +5,7 @@
 ===================================== */
 
 const CONFIG = {
- apiEndpoint: "https://link-moi-cua-ban.trycloudflare.com/api/download",
+  apiEndpoint: "https://rugby-loans-forbes-caribbean.trycloudflare.com/api/download",
   adminPassword: "123456",
   maxHistory: 50
 };
