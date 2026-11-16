@@ -5,7 +5,7 @@
 ===================================== */
 
 const CONFIG = {
-  apiEndpoint: "https://ladder-coaching-routine-seat.trycloudflare.com/api/download",
+ apiEndpoint: "https://link-moi-cua-ban.trycloudflare.com/api/download",
   adminPassword: "123456",
   maxHistory: 50
 };
