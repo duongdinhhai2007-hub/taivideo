@@ -1,4 +1,3 @@
-
 "use strict";
 
 /* =====================================
@@ -7,7 +6,7 @@
 
 const CONFIG = {
   apiEndpoint: "https://restore-comedy-demonstrate-christina.trycloudflare.com/api/download",
-  adminPassword: "123456", // DEMO ONLY
+  adminPassword: "123456",
   maxHistory: 50
 };
 
@@ -71,19 +70,12 @@ let currentUrl = "";
 let currentPlatform = null;
 let currentResult = null;
 
-/* =====================================
-   PLATFORM DETECTION
-===================================== */
-
 function detectPlatform(value) {
   try {
     const url = new URL(value);
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
-
     return PLATFORMS.find(platform =>
-      platform.domains.some(domain =>
-        host === domain || host.endsWith("." + domain)
-      )
+      platform.domains.some(domain => host === domain || host.endsWith("." + domain))
     ) || null;
   } catch {
     return null;
@@ -91,12 +83,10 @@ function detectPlatform(value) {
 }
 
 function renderPlatforms() {
-  $("platformGrid").innerHTML = PLATFORMS.map(platform => `
-    <div class="platform-item"
-         data-platform="${platform.name}"
-         tabindex="0"
-         role="button"
-         aria-label="${platform.name}">
+  const grid = $("platformGrid");
+  if (!grid) return;
+  grid.innerHTML = PLATFORMS.map(platform => `
+    <div class="platform-item" data-platform="${platform.name}" tabindex="0" role="button" aria-label="${platform.name}">
       <span class="emoji">${platform.icon}</span>
       <strong>${platform.name}</strong>
     </div>
@@ -106,14 +96,10 @@ function renderPlatforms() {
     const choose = () => {
       const input = $("videoUrl");
       const name = item.dataset.platform;
-
       input.focus();
-      $("message").textContent =
-        `Bạn đã chọn ${name}. Hãy dán liên kết tương ứng.`;
-
+      $("message").textContent = `Bạn đã chọn ${name}. Hãy dán liên kết tương ứng.`;
       input.dataset.selected = name;
     };
-
     item.addEventListener("click", choose);
     item.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
@@ -127,30 +113,17 @@ function renderPlatforms() {
 function updateDetection() {
   const value = $("videoUrl").value.trim();
   currentPlatform = detectPlatform(value);
-
   $("detected").textContent = currentPlatform
     ? `✓ Đã nhận diện: ${currentPlatform.name}`
-    : value
-      ? "Không nhận diện được nền tảng"
-      : "Chưa nhận diện nền tảng";
-
-  $("detected").style.color =
-    currentPlatform ? "#16a34a" : "#64748b";
+    : value ? "Không nhận diện được nền tảng" : "Chưa nhận diện nền tảng";
+  $("detected").style.color = currentPlatform ? "#16a34a" : "#64748b";
 }
 
-/* =====================================
-   LANGUAGE
-===================================== */
-
 function setLanguage(language) {
-  currentLanguage = TRANSLATIONS[language]
-    ? language : "vi";
-
+  currentLanguage = TRANSLATIONS[language] ? language : "vi";
   localStorage.setItem("tv_lang", currentLanguage);
-  $("language").value = currentLanguage;
-
+  if ($("language")) $("language").value = currentLanguage;
   document.documentElement.lang = currentLanguage;
-
   document.querySelectorAll("[data-i18n]").forEach(element => {
     const key = element.dataset.i18n;
     if (TRANSLATIONS[currentLanguage][key]) {
@@ -159,23 +132,16 @@ function setLanguage(language) {
   });
 }
 
-/* =====================================
-   URL ANALYSIS
-===================================== */
-
 async function analyzeLink() {
   const url = $("videoUrl").value.trim();
-
   if (!url) {
     $("message").textContent = "Vui lòng nhập liên kết.";
     return;
   }
 
   const platform = detectPlatform(url);
-
   if (!platform) {
-    $("message").textContent =
-      "Liên kết không hợp lệ hoặc chưa hỗ trợ.";
+    $("message").textContent = "Liên kết không hợp lệ hoặc chưa hỗ trợ.";
     return;
   }
 
@@ -185,12 +151,9 @@ async function analyzeLink() {
   $("analyzeBtn").disabled = true;
   $("analyzeBtn").textContent = "ĐANG PHÂN TÍCH...";
   $("message").textContent = "";
+  $("downloadMessage").textContent = "";
 
   try {
-    // Gọi backend nếu đã cấu hình API.
-    // Backend phải trả về JSON có cấu trúc:
-    // { success:true, title:"...", formats:[...] }
-
     const response = await fetch(CONFIG.apiEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -201,68 +164,43 @@ async function analyzeLink() {
       })
     });
 
-    if (!response.ok) {
-      throw new Error("API_NOT_READY");
-    }
-
+    if (!response.ok) throw new Error("HTTP_" + response.status);
     const data = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.message || "Không thể phân tích.");
-    }
+    if (!data.success) throw new Error(data.message || "Không thể phân tích.");
 
     currentResult = data;
-
-    $("resultPlatform").textContent =
-      `${platform.name} · ${data.title || "Nội dung đã nhận diện"}`;
-
+    $("resultPlatform").textContent = `${platform.name} · ${data.title || "Nội dung đã nhận diện"}`;
     $("result").classList.remove("hidden");
     $("message").textContent = "Phân tích thành công!";
 
     if (Array.isArray(data.formats) && data.formats.length) {
       $("quality").innerHTML = data.formats.map(format => `
-        <option value="${escapeHTML(format.id)}">
-          ${escapeHTML(format.label)}
-        </option>
+        <option value="${escapeHTML(format.id)}">${escapeHTML(format.label)}</option>
       `).join("");
     }
-
   } catch (error) {
     currentResult = null;
-
-    $("resultPlatform").textContent =
-      `${platform.name} · ${new URL(url).hostname}`;
-
+    $("resultPlatform").textContent = `${platform.name} · ${new URL(url).hostname}`;
     $("result").classList.remove("hidden");
-
-    $("message").textContent =
-      "Đã nhận diện link. Backend tải xuống chưa được kết nối.";
-
-    $("downloadMessage").textContent =
-      "Hãy cấu hình API backend để tải file thực tế.";
+    $("message").textContent = "Lỗi kết nối API (" + error.message + "). Kiểm tra lại cửa sổ uvicorn và cloudflared trên máy tính.";
   } finally {
     $("analyzeBtn").disabled = false;
-    $("analyzeBtn").innerHTML =
-      '↓ <span data-i18n="analyze"></span>';
+    $("analyzeBtn").innerHTML = '↓ <span data-i18n="analyze"></span>';
     setLanguage(currentLanguage);
   }
 }
-
-/* =====================================
-   DOWNLOAD
-===================================== */
 
 async function downloadMedia() {
   if (!currentUrl || !currentPlatform) return;
 
   if (!currentResult) {
-    $("downloadMessage").textContent =
-      "Chưa có kết quả từ API. Chưa thể tải file.";
+    $("downloadMessage").textContent = "Chưa có kết quả từ API. Hãy bấm PHÂN TÍCH LIÊN KẾT trước.";
     return;
   }
 
   $("downloadBtn").disabled = true;
-  $("downloadBtn").textContent = "ĐANG XỬ LÝ...";
+  $("downloadBtn").textContent = "ĐANG TẢI VỀ MÁY CHỦ...";
+  $("downloadMessage").textContent = "";
 
   try {
     const response = await fetch(CONFIG.apiEndpoint, {
@@ -277,17 +215,13 @@ async function downloadMedia() {
       })
     });
 
-    if (!response.ok) throw new Error("Download failed");
-
+    if (!response.ok) throw new Error("HTTP_" + response.status);
     const data = await response.json();
-
     if (!data.success || !data.downloadUrl) {
       throw new Error(data.message || "Không có file tải xuống.");
     }
 
-    // Chỉ chấp nhận URL HTTP/HTTPS do backend cung cấp.
     const downloadUrl = new URL(data.downloadUrl);
-
     if (!["https:", "http:"].includes(downloadUrl.protocol)) {
       throw new Error("Địa chỉ tải xuống không hợp lệ.");
     }
@@ -296,28 +230,20 @@ async function downloadMedia() {
     link.href = downloadUrl.href;
     link.rel = "noopener";
     link.target = "_blank";
-    link.download = "";
+    link.download = data.filename || "";
     document.body.appendChild(link);
     link.click();
     link.remove();
 
     saveHistory(currentPlatform.name, currentUrl, "success");
-
-    $("downloadMessage").textContent =
-      "Đã gửi yêu cầu tải xuống thành công.";
-
+    $("downloadMessage").textContent = "Tải xuống hoàn tất!";
   } catch (error) {
-    $("downloadMessage").textContent =
-      "Không thể tải file: " + error.message;
+    $("downloadMessage").textContent = "Không thể tải file: " + error.message;
   } finally {
     $("downloadBtn").disabled = false;
     $("downloadBtn").textContent = "↓ TẢI XUỐNG";
   }
 }
-
-/* =====================================
-   HISTORY
-===================================== */
 
 function getHistory() {
   try {
@@ -329,33 +255,20 @@ function getHistory() {
 
 function saveHistory(platform, url, status) {
   const history = getHistory();
-
-  history.unshift({
-    platform,
-    url,
-    status,
-    date: new Date().toISOString()
-  });
-
-  localStorage.setItem(
-    "tv_history",
-    JSON.stringify(history.slice(0, CONFIG.maxHistory))
-  );
-
+  history.unshift({ platform, url, status, date: new Date().toISOString() });
+  localStorage.setItem("tv_history", JSON.stringify(history.slice(0, CONFIG.maxHistory)));
   renderHistory();
-  updateAdminStats();
 }
 
 function renderHistory() {
   const history = getHistory();
-
+  const list = $("historyList");
+  if (!list) return;
   if (!history.length) {
-    $("historyList").innerHTML =
-      '<p class="empty">Chưa có lịch sử tải xuống.</p>';
+    list.innerHTML = '<p class="empty">Chưa có lịch sử tải xuống.</p>';
     return;
   }
-
-  $("historyList").innerHTML = history.map(item => `
+  list.innerHTML = history.map(item => `
     <div class="history-item">
       <div>
         <strong>${escapeHTML(item.platform)}</strong>
@@ -369,148 +282,38 @@ function renderHistory() {
 
 function clearHistory() {
   if (!confirm("Bạn có chắc muốn xóa toàn bộ lịch sử?")) return;
-
   localStorage.removeItem("tv_history");
   renderHistory();
-  updateAdminStats();
 }
-
-/* =====================================
-   ADMIN
-===================================== */
-
-function openAdmin() {
-  $("adminModal").classList.remove("hidden");
-
-  const authenticated =
-    sessionStorage.getItem("tv_admin") === "true";
-
-  $("adminLogin").classList.toggle("hidden", authenticated);
-  $("adminPanel").classList.toggle("hidden", !authenticated);
-
-  if (authenticated) updateAdminStats();
-}
-
-function loginAdmin() {
-  const password = $("adminPassword").value;
-
-  if (password === CONFIG.adminPassword) {
-    sessionStorage.setItem("tv_admin", "true");
-    $("loginError").textContent = "";
-    $("adminPassword").value = "";
-    openAdmin();
-  } else {
-    $("loginError").textContent = "Mật khẩu không chính xác.";
-  }
-}
-
-function logoutAdmin() {
-  sessionStorage.removeItem("tv_admin");
-  openAdmin();
-}
-
-function updateAdminStats() {
-  $("totalHistory").textContent = getHistory().length;
-  $("platformCount").textContent = PLATFORMS.length;
-}
-
-function saveSettings() {
-  const name = $("siteName").value.trim();
-  const endpoint = $("apiEndpoint").value.trim();
-
-  if (endpoint && !endpoint.startsWith("/")) {
-    try {
-      const parsed = new URL(endpoint);
-      if (!["https:", "http:"].includes(parsed.protocol)) {
-        throw new Error();
-      }
-    } catch {
-      alert("API endpoint không hợp lệ.");
-      return;
-    }
-  }
-
-  localStorage.setItem("tv_site_name", name || "TaiVideo");
-  localStorage.setItem("tv_api", endpoint || "/api/download");
-
-  CONFIG.apiEndpoint = endpoint || "/api/download";
-
-  alert("Đã lưu cài đặt trên trình duyệt!");
-  document.title = (name || "TaiVideo") +
-    " - All in One Downloader";
-}
-
-/* =====================================
-   SECURITY HELPER
-===================================== */
 
 function escapeHTML(value) {
   return String(value).replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
   })[char]);
 }
 
-/* =====================================
-   INITIALIZATION
-===================================== */
-
 document.addEventListener("DOMContentLoaded", () => {
-  if ($("year")) $("year").textContent = new Date().getFullYear();
-
   renderPlatforms();
   renderHistory();
   setLanguage(currentLanguage);
 
-  const savedName = localStorage.getItem("tv_site_name");
-  if (savedName) document.title = savedName;
+  $("videoUrl")?.addEventListener("input", updateDetection);
+  $("analyzeBtn")?.addEventListener("click", analyzeLink);
+  $("downloadBtn")?.addEventListener("click", downloadMedia);
 
-  $("videoUrl").addEventListener("input", updateDetection);
-  $("analyzeBtn").addEventListener("click", analyzeLink);
-  $("downloadBtn").addEventListener("click", downloadMedia);
-
-  $("clearUrl").addEventListener("click", () => {
+  $("clearUrl")?.addEventListener("click", () => {
     $("videoUrl").value = "";
     $("result").classList.add("hidden");
+    $("message").textContent = "";
+    $("downloadMessage").textContent = "";
     currentUrl = "";
     currentPlatform = null;
     currentResult = null;
     updateDetection();
   });
 
-  $("language").addEventListener("change", event => {
-    setLanguage(event.target.value);
-  });
-
-  $("clearHistory").addEventListener("click", clearHistory);
-
-  $("adminOpen").addEventListener("click", openAdmin);
-  $("adminClose").addEventListener("click", () => {
-    $("adminModal").classList.add("hidden");
-  });
-
-  $("loginBtn").addEventListener("click", loginAdmin);
-  $("adminPassword").addEventListener("keydown", event => {
-    if (event.key === "Enter") loginAdmin();
-  });
-
-  $("logoutBtn").addEventListener("click", logoutAdmin);
-  $("saveSettings").addEventListener("click", saveSettings);
-
-  $("adminModal").addEventListener("click", event => {
-    if (event.target === $("adminModal")) {
-      $("adminModal").classList.add("hidden");
-    }
-  });
-
-  const savedEndpoint = localStorage.getItem("tv_api");
-  const savedSiteName = localStorage.getItem("tv_site_name");
-
-  $("apiEndpoint").value = savedEndpoint || "/api/download";
-  $("siteName").value = savedSiteName || "TaiVideo";
+  $("language")?.addEventListener("change", event => setLanguage(event.target.value));
+  $("clearHistory")?.addEventListener("click", clearHistory);
 
   updateDetection();
 });
