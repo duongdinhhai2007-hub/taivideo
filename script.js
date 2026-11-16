@@ -5,7 +5,7 @@
 ===================================== */
 
 const CONFIG = {
-  apiEndpoint: "https://restore-comedy-demonstrate-christina.trycloudflare.com/api/download",
+  apiEndpoint: "https://ladder-coaching-routine-seat.trycloudflare.com/api/download",
   adminPassword: "123456",
   maxHistory: 50
 };
