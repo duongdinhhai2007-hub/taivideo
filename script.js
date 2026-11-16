@@ -6,7 +6,7 @@
 ===================================== */
 
 const CONFIG = {
-  apiEndpoint: localStorage.getItem("tv_api") || "/api/download",
+  apiEndpoint: "https://restore-comedy-demonstrate-christina.trycloudflare.com/api/download",
   adminPassword: "123456", // DEMO ONLY
   maxHistory: 50
 };
