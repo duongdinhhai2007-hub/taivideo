@@ -5,7 +5,7 @@
 ===================================== */
 
 const CONFIG = {
-  apiEndpoint: "https://rugby-loans-forbes-caribbean.trycloudflare.com/api/download",
+  apiEndpoint: "https://taivideo-eo07.onrender.com/api/download",
   adminPassword: "123456",
   maxHistory: 50
 };
