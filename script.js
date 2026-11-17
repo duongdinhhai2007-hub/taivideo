@@ -135,6 +135,25 @@ function setLanguage(language) {
   });
 }
 
+async function callApi(payload, timeoutMs = 180000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(CONFIG.apiEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error("HTTP_" + response.status);
+    return await response.json();
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("Máy chủ phản hồi quá lâu");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 async function analyzeLink() {
   const url = extractCleanUrl($("videoUrl").value);
   $("videoUrl").value = url;
