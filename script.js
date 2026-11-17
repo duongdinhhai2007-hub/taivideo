@@ -6,7 +6,6 @@
 
 const CONFIG = {
   apiEndpoint: "https://taivideo-eo07.onrender.com/api/download",
-  adminPassword: "123456",
   maxHistory: 50
 };
 
