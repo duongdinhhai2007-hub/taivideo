@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -47,15 +48,20 @@ if DENO_BIN.exists():
 PROXY_URL = os.environ.get("PROXY_URL", "").strip()
 
 
+COOKIE_SOURCE: Optional[str] = None
+
+
 def prepare_cookie_file() -> Optional[Path]:
     """Tìm cookies.txt (Render Secret File: /etc/secrets/cookies.txt),
     rồi chép sang /tmp để yt-dlp ghi được (thư mục secrets chỉ đọc)."""
+    global COOKIE_SOURCE
     candidates = [
         Path("/etc/secrets/cookies.txt"),
         Path(__file__).parent / "cookies.txt",
     ]
     for src in candidates:
         if src.exists():
+            COOKIE_SOURCE = str(src)
             dst = Path("/tmp/cookies_runtime.txt")
             try:
                 shutil.copyfile(src, dst)
@@ -90,7 +96,12 @@ def expand_short_url(url: str) -> str:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=10) as resp:
-                return resp.geturl()
+                final = resp.geturl()
+            # Douyin hay chuyển sang iesdouyin.com/share/video/ID -> đưa về dạng chuẩn
+            m = re.search(r"/(video|note)/(\d+)", final)
+            if "douyin" in final.lower() and m:
+                return f"https://www.douyin.com/{m.group(1)}/{m.group(2)}"
+            return final
         except Exception as e:
             print("EXPAND URL ERROR:", e)
     return url
@@ -231,7 +242,24 @@ def download_media_file(raw_url: str, quality: str, task_dir: Path) -> tuple[Opt
 @app.get("/")
 @app.get("/health")
 def health():
-    return {"status": "ok", "cookies_loaded": COOKIE_FILE is not None, "proxy": bool(PROXY_URL)}
+    count, has_ttwid = 0, False
+    if COOKIE_FILE and COOKIE_FILE.exists():
+        try:
+            for line in COOKIE_FILE.read_text(errors="ignore").splitlines():
+                if line.strip() and not line.startswith("#"):
+                    count += 1
+                    if "\tttwid\t" in line:
+                        has_ttwid = True
+        except Exception:
+            pass
+    return {
+        "status": "ok",
+        "cookies_loaded": COOKIE_FILE is not None,
+        "cookie_source": COOKIE_SOURCE,  # /etc/secrets/cookies.txt = đúng (Secret File)
+        "cookie_count": count,
+        "has_ttwid": has_ttwid,
+        "proxy": bool(PROXY_URL),
+    }
 
 
 @app.post("/api/download")
