@@ -173,22 +173,15 @@ async function analyzeLink() {
 
   $("analyzeBtn").disabled = true;
   $("analyzeBtn").textContent = "ĐANG PHÂN TÍCH...";
-  $("message").textContent = "";
+  $("message").textContent = "Đang phân tích... (lần đầu máy chủ có thể mất ~1 phút để khởi động)";
   $("downloadMessage").textContent = "";
 
   try {
-    const response = await fetch(CONFIG.apiEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "analyze",
-        url: currentUrl,
-        platform: currentPlatform.name
-      })
+    const data = await callApi({
+      action: "analyze",
+      url: currentUrl,
+      platform: currentPlatform.name
     });
-
-    if (!response.ok) throw new Error("HTTP_" + response.status);
-    const data = await response.json();
     if (!data.success) throw new Error(data.message || "Không thể phân tích.");
 
     currentResult = data;
@@ -205,7 +198,7 @@ async function analyzeLink() {
     currentResult = null;
     $("resultPlatform").textContent = `${platform.name} · ${new URL(url).hostname}`;
     $("result").classList.remove("hidden");
-    $("message").textContent = "Lỗi kết nối API (" + error.message + "). Kiểm tra lại cửa sổ uvicorn và cloudflared trên máy tính.";
+    $("message").textContent = "Không thể phân tích: " + error.message;
   } finally {
     $("analyzeBtn").disabled = false;
     $("analyzeBtn").innerHTML = '↓ <span data-i18n="analyze"></span>';
