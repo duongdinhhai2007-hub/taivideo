@@ -1,139 +1,259 @@
+import asyncio
 import os
-import glob
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+import shutil
+import subprocess
+import sys
+import urllib.request
+import uuid
+from pathlib import Path
+from typing import Optional
+from urllib.parse import quote
+
+import imageio_ffmpeg
 import yt_dlp
-import gallery_dl
+from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-app = FastAPI()
+app = FastAPI(title="TaiVideo API")
 
+# allow_credentials phải là False khi allow_origins=["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-DOWNLOAD_DIR = "temp_downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+WORKSPACE_DIR = Path("temp_downloads")
+WORKSPACE_DIR.mkdir(exist_ok=True)
 
-class RequestData(BaseModel):
+UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
+# ffmpeg tích hợp sẵn (Render không có ffmpeg hệ thống)
+FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
+
+# Proxy tuỳ chọn (đặt biến môi trường PROXY_URL trên Render nếu IP bị chặn)
+PROXY_URL = os.environ.get("PROXY_URL", "").strip()
+
+
+def prepare_cookie_file() -> Optional[Path]:
+    """Tìm cookies.txt (Render Secret File: /etc/secrets/cookies.txt),
+    rồi chép sang /tmp để yt-dlp ghi được (thư mục secrets chỉ đọc)."""
+    candidates = [
+        Path("/etc/secrets/cookies.txt"),
+        Path(__file__).parent / "cookies.txt",
+    ]
+    for src in candidates:
+        if src.exists():
+            dst = Path("/tmp/cookies_runtime.txt")
+            try:
+                shutil.copyfile(src, dst)
+                return dst
+            except Exception:
+                return src
+    return None
+
+
+COOKIE_FILE = prepare_cookie_file()
+
+
+class ApiPayload(BaseModel):
     action: str
     url: str
-    platform: str = None
-    quality: str = None
-    formatId: str = None
+    platform: Optional[str] = ""
+    quality: Optional[str] = "1080"
+    formatId: Optional[str] = "1080"
 
+
+async def cleanup_later(target_path: Path, delay: int = 1800):
+    await asyncio.sleep(delay)
+    if target_path.is_dir():
+        shutil.rmtree(target_path, ignore_errors=True)
+    elif target_path.exists():
+        target_path.unlink(missing_ok=True)
+
+
+def expand_short_url(url: str) -> str:
+    low = url.lower()
+    if "v.douyin.com" in low or "vm.tiktok.com" in low or "vt.tiktok.com" in low:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.geturl()
+        except Exception as e:
+            print("EXPAND URL ERROR:", e)
+    return url
+
+
+def get_ydl_base_opts(url: str) -> dict:
+    low = url.lower()
+    headers = {"User-Agent": UA}
+    if "douyin.com" in low:
+        headers["Referer"] = "https://www.douyin.com/"
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "http_headers": headers,
+        "ffmpeg_location": FFMPEG_PATH,
+    }
+    if PROXY_URL:
+        opts["proxy"] = PROXY_URL
+    # Chỉ gửi cookie Douyin cho Douyin (không rò sang site khác)
+    if "douyin.com" in low and COOKIE_FILE:
+        opts["cookiefile"] = str(COOKIE_FILE)
+    return opts
+
+
+def analyze_url(raw_url: str) -> dict:
+    url = expand_short_url(raw_url)
+    ydl_opts = get_ydl_base_opts(url)
+    ydl_opts["extract_flat"] = False
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            title = info.get("title") or (info.get("description") or "")[:60] or "Video / Media"
+            formats = [
+                {"id": "1080", "label": "Chất lượng cao nhất (MP4)"},
+                {"id": "720", "label": "720p HD (MP4)"},
+                {"id": "480", "label": "480p Tiết kiệm (MP4)"},
+                {"id": "audio", "label": "Chỉ âm thanh (MP3 192kbps)"},
+            ]
+            return {"success": True, "title": title, "formats": formats}
+    except Exception as e:
+        print("ANALYZE ERROR:", e)  # xem trong tab Logs của Render
+        # Bài đăng ảnh / slide: để gallery-dl xử lý lúc tải
+        return {
+            "success": True,
+            "title": "Bài đăng ảnh / Media",
+            "formats": [
+                {"id": "best", "label": "Chất lượng gốc tốt nhất"},
+                {"id": "images", "label": "Tải toàn bộ ảnh (ZIP)"},
+            ],
+        }
+
+
+def run_gallery_dl(url: str, task_dir: Path) -> str:
+    """Gọi gallery-dl bằng danh sách tham số (KHÔNG dùng os.system -> tránh injection)."""
+    exe = shutil.which("gallery-dl")
+    cmd = [exe] if exe else [sys.executable, "-m", "gallery_dl"]
+    cmd += ["-d", str(task_dir)]
+    if PROXY_URL:
+        cmd += ["--proxy", PROXY_URL]
+    if "douyin.com" in url.lower() and COOKIE_FILE:
+        cmd += ["--cookies", str(COOKIE_FILE)]
+    cmd.append(url)
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    err = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
+    return err
+
+
+def download_media_file(raw_url: str, quality: str, task_dir: Path) -> tuple[Optional[Path], str]:
+    url = expand_short_url(raw_url)
+    opts = get_ydl_base_opts(url)
+    opts.update({
+        "outtmpl": str(task_dir / "video_%(id)s.%(ext)s"),
+        "retries": 5,
+        "fragment_retries": 5,
+        "restrictfilenames": True,
+    })
+
+    if quality == "audio":
+        opts["format"] = "bestaudio/best"
+        opts["postprocessors"] = [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }]
+    elif quality in {"720", "480", "360"}:
+        h = int(quality)
+        opts["format"] = f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best"
+        opts["merge_output_format"] = "mp4"
+    else:
+        # "1080" / "best": đừng ép ext=mp4 quá chặt, để fallback /best chạy được
+        opts["format"] = "bestvideo+bestaudio/best"
+        opts["merge_output_format"] = "mp4"
+
+    last_error = ""
+    if quality != "images":
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+        except Exception as e:
+            last_error = str(e)
+            print("YTDLP ERROR:", last_error)
+
+    files = [f for f in task_dir.rglob("*") if f.is_file()]
+    if not files:
+        try:
+            err = run_gallery_dl(url, task_dir)
+            if not last_error:
+                last_error = err
+        except Exception as e:
+            last_error = last_error or str(e)
+            print("GALLERY-DL ERROR:", e)
+        files = [f for f in task_dir.rglob("*") if f.is_file()]
+
+    if not files:
+        return None, last_error or "Không tìm thấy luồng video/ảnh từ liên kết này."
+    if len(files) == 1:
+        return files[0], ""
+
+    shutil.make_archive(str(WORKSPACE_DIR / task_dir.name), "zip", task_dir)
+    return WORKSPACE_DIR / f"{task_dir.name}.zip", ""
+
+
+@app.get("/")
 @app.get("/health")
-def health_check():
-    cookies_exist = os.path.exists("cookies.txt")
-    return {"status": "ok", "cookies_loaded": cookies_exist}
+def health():
+    return {"status": "ok", "cookies_loaded": COOKIE_FILE is not None, "proxy": bool(PROXY_URL)}
+
 
 @app.post("/api/download")
-def handle_download(data: RequestData, background_tasks: BackgroundTasks):
-    url = data.url
-    action = data.action
+async def handle_api(payload: ApiPayload, request: Request, background_tasks: BackgroundTasks):
+    if payload.action == "analyze":
+        return await asyncio.to_thread(analyze_url, payload.url)
 
-    if not url:
-        return {"success": False, "message": "Thiếu đường dẫn URL."}
+    if payload.action == "download":
+        task_id = uuid.uuid4().hex[:10]
+        task_dir = WORKSPACE_DIR / task_id
+        task_dir.mkdir(parents=True, exist_ok=True)
 
-    ydl_opts_base = {
-        'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
-        'noplaylist': True,
-        'quiet': True,
-    }
+        quality = payload.quality or payload.formatId or "1080"
+        result_file, err_msg = await asyncio.to_thread(
+            download_media_file, payload.url, quality, task_dir
+        )
 
-    if action == "analyze":
-        try:
-            # Kiểm tra nếu là dạng ảnh TikTok / gallery
-            if "/photo/" in url or "gallery-dl" in url:
-                return {
-                    "success": True,
-                    "title": "Bài viết dạng ảnh / Slide TikTok",
-                    "formats": [{"id": "best", "label": "Tải toàn bộ ảnh chuẩn HD"}]
-                }
+        if not result_file or not result_file.exists():
+            shutil.rmtree(task_dir, ignore_errors=True)
+            return {"success": False, "message": f"Lỗi từ hệ thống tải: {err_msg}"}
 
-            with yt_dlp.YoutubeDL(ydl_opts_base) as ydl:
-                info = ydl.extract_info(url, download=False)
-                title = info.get('title', 'Video đã tải')
-                
-                formats = [
-                    {"id": "best", "label": "Tốt nhất (Mặc định MP4)"},
-                    {"id": "720", "label": "HD 720p"},
-                    {"id": "360", "label": "SD 360p"}
-                ]
-                
-                return {
-                    "success": True,
-                    "title": title,
-                    "formats": formats
-                }
-        except Exception as e:
-            error_msg = str(e)
-            if "Unsupported URL" in error_msg:
-                return {"success": False, "message": "Đường dẫn không được hỗ trợ hoặc đây là định dạng bài đăng ảnh đặc biệt."}
-            return {"success": False, "message": f"Không thể phân tích: {error_msg}"}
+        background_tasks.add_task(cleanup_later, task_dir, 1800)
+        if result_file.suffix == ".zip" and result_file.parent == WORKSPACE_DIR:
+            background_tasks.add_task(cleanup_later, result_file, 1800)
 
-    elif action == "download":
-        try:
-            for f in glob.glob(os.path.join(DOWNLOAD_DIR, "*")):
-                try:
-                    os.remove(f)
-                except:
-                    pass
-
-            # Xử lý tải bằng gallery-dl nếu là link ảnh TikTok
-            if "/photo/" in url:
-                os.system(f"gallery-dl -d {DOWNLOAD_DIR} '{url}'")
-                files = glob.glob(os.path.join(DOWNLOAD_DIR, "*"))
-                if files:
-                    download_url = f"/download-file?file={os.path.basename(files[0])}"
-                    return {
-                        "success": True,
-                        "downloadUrl": download_url,
-                        "filename": os.path.basename(files[0])
-                    }
-                raise Exception("Không thể tải xuống bài viết ảnh này.")
-
-            ydl_opts = {
-                **ydl_opts_base,
-                'format': 'bestvideo+bestaudio/best',
-                'merge_output_format': 'mp4',
-                'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s.%(ext)s'),
-            }
-
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info)
-                
-                base, _ = os.path.splitext(filename)
-                mp4_filename = base + ".mp4"
-                
-                if not os.path.exists(mp4_filename):
-                    files = glob.glob(os.path.join(DOWNLOAD_DIR, "*"))
-                    if files:
-                        mp4_filename = files[0]
-                    else:
-                        raise Exception("Không tìm thấy file sau khi tải về.")
-
-                download_url = f"/download-file?file={os.path.basename(mp4_filename)}"
-                
-                return {
-                    "success": True,
-                    "downloadUrl": download_url,
-                    "filename": os.path.basename(mp4_filename)
-                }
-        except Exception as e:
-            return {"success": False, "message": f"Lỗi từ hệ thống tải: {str(e)}"}
+        # URL TUYỆT ĐỐI trỏ về Render (frontend ở Vercel nên link tương đối sẽ 404)
+        base_url = str(request.base_url).rstrip("/").replace("http://", "https://")
+        download_url = f"{base_url}/files/{task_id}/{quote(result_file.name)}"
+        return {"success": True, "downloadUrl": download_url, "filename": result_file.name}
 
     return {"success": False, "message": "Hành động không hợp lệ."}
 
-@app.get("/download-file")
-def download_file(file: str):
-    file_path = os.path.join(DOWNLOAD_DIR, file)
-    if os.path.exists(file_path):
-        return FileResponse(file_path, filename=file)
-    raise HTTPException(status_code=404, detail="File không tồn tại hoặc đã bị xóa.")
+
+@app.get("/files/{task_id}/{filename}")
+async def serve_downloaded_file(task_id: str, filename: str):
+    # Chặn path traversal
+    task_id = Path(task_id).name
+    filename = Path(filename).name
+    file_path = WORKSPACE_DIR / task_id / filename
+    if not file_path.exists():
+        file_path = WORKSPACE_DIR / filename
+    if not file_path.exists():
+        return {"success": False, "message": "File đã hết hạn."}
+    return FileResponse(path=file_path, filename=filename, media_type="application/octet-stream")
