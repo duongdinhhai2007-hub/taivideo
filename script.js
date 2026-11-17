@@ -216,28 +216,22 @@ async function downloadMedia() {
 
   $("downloadBtn").disabled = true;
   $("downloadBtn").textContent = "ĐANG TẢI VỀ MÁY CHỦ...";
-  $("downloadMessage").textContent = "";
+  $("downloadMessage").textContent = "Đang tải về máy chủ, vui lòng chờ...";
 
   try {
-    const response = await fetch(CONFIG.apiEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "download",
-        url: currentUrl,
-        platform: currentPlatform.name,
-        quality: $("quality").value,
-        formatId: $("quality").value
-      })
+    const data = await callApi({
+      action: "download",
+      url: currentUrl,
+      platform: currentPlatform.name,
+      quality: $("quality").value,
+      formatId: $("quality").value
     });
 
-    if (!response.ok) throw new Error("HTTP_" + response.status);
-    const data = await response.json();
     if (!data.success || !data.downloadUrl) {
       throw new Error(data.message || "Không có file tải xuống.");
     }
 
-    const downloadUrl = new URL(data.downloadUrl);
+    const downloadUrl = new URL(data.downloadUrl, CONFIG.apiEndpoint);
     if (!["https:", "http:"].includes(downloadUrl.protocol)) {
       throw new Error("Địa chỉ tải xuống không hợp lệ.");
     }
@@ -260,7 +254,6 @@ async function downloadMedia() {
     $("downloadBtn").textContent = "↓ TẢI XUỐNG";
   }
 }
-
 function getHistory() {
   try {
     return JSON.parse(localStorage.getItem("tv_history")) || [];
