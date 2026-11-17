@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-yt-dlp[default]
+yt-dlp
 gallery-dl
 pydantic
-imageio-ffmpeg
