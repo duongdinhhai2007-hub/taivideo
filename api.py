@@ -48,6 +48,14 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
 
     if action == "analyze":
         try:
+            # Kiểm tra nếu là dạng ảnh TikTok / gallery
+            if "/photo/" in url or "gallery-dl" in url:
+                return {
+                    "success": True,
+                    "title": "Bài viết dạng ảnh / Slide TikTok",
+                    "formats": [{"id": "best", "label": "Tải toàn bộ ảnh chuẩn HD"}]
+                }
+
             with yt_dlp.YoutubeDL(ydl_opts_base) as ydl:
                 info = ydl.extract_info(url, download=False)
                 title = info.get('title', 'Video đã tải')
@@ -64,7 +72,10 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
                     "formats": formats
                 }
         except Exception as e:
-            return {"success": False, "message": f"Không thể phân tích: {str(e)}"}
+            error_msg = str(e)
+            if "Unsupported URL" in error_msg:
+                return {"success": False, "message": "Đường dẫn không được hỗ trợ hoặc đây là định dạng bài đăng ảnh đặc biệt."}
+            return {"success": False, "message": f"Không thể phân tích: {error_msg}"}
 
     elif action == "download":
         try:
@@ -73,6 +84,19 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
                     os.remove(f)
                 except:
                     pass
+
+            # Xử lý tải bằng gallery-dl nếu là link ảnh TikTok
+            if "/photo/" in url:
+                os.system(f"gallery-dl -d {DOWNLOAD_DIR} '{url}'")
+                files = glob.glob(os.path.join(DOWNLOAD_DIR, "*"))
+                if files:
+                    download_url = f"/download-file?file={os.path.basename(files[0])}"
+                    return {
+                        "success": True,
+                        "downloadUrl": download_url,
+                        "filename": os.path.basename(files[0])
+                    }
+                raise Exception("Không thể tải xuống bài viết ảnh này.")
 
             ydl_opts = {
                 **ydl_opts_base,
@@ -111,5 +135,5 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
 def download_file(file: str):
     file_path = os.path.join(DOWNLOAD_DIR, file)
     if os.path.exists(file_path):
-        return FileResponse(file_path, media_type="video/mp4", filename=file)
+        return FileResponse(file_path, filename=file)
     raise HTTPException(status_code=404, detail="File không tồn tại hoặc đã bị xóa.")
