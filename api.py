@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-import yt-dlp
+import yt_dlp
 import gallery_dl
 
 app = FastAPI()
@@ -40,7 +40,6 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
     if not url:
         return {"success": False, "message": "Thiếu đường dẫn URL."}
 
-    # Cấu hình yt-dlp tối ưu cho tất cả các nền tảng (Facebook, YouTube, TikTok...)
     ydl_opts_base = {
         'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
         'noplaylist': True,
@@ -49,11 +48,10 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
 
     if action == "analyze":
         try:
-            with yt-dlp.YoutubeDL(ydl_opts_base) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts_base) as ydl:
                 info = ydl.extract_info(url, download=False)
                 title = info.get('title', 'Video đã tải')
                 
-                # Tạo các tùy chọn chất lượng cho người dùng lựa chọn
                 formats = [
                     {"id": "best", "label": "Tốt nhất (Mặc định MP4)"},
                     {"id": "720", "label": "HD 720p"},
@@ -70,14 +68,12 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
 
     elif action == "download":
         try:
-            # Dọn dẹp các file cũ trong thư mục tạm trước khi tải mới
             for f in glob.glob(os.path.join(DOWNLOAD_DIR, "*")):
                 try:
                     os.remove(f)
                 except:
                     pass
 
-            # Cấu hình tải và tự động gộp video + audio thành file MP4 chuẩn
             ydl_opts = {
                 **ydl_opts_base,
                 'format': 'bestvideo+bestaudio/best',
@@ -85,16 +81,14 @@ def handle_download(data: RequestData, background_tasks: BackgroundTasks):
                 'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s.%(ext)s'),
             }
 
-            with yt-dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 filename = ydl.prepare_filename(info)
                 
-                # Đảm bảo định dạng file trả về là .mp4
                 base, _ = os.path.splitext(filename)
                 mp4_filename = base + ".mp4"
                 
                 if not os.path.exists(mp4_filename):
-                    # Tìm file bất kỳ trong thư mục temp nếu tên khác
                     files = glob.glob(os.path.join(DOWNLOAD_DIR, "*"))
                     if files:
                         mp4_filename = files[0]
