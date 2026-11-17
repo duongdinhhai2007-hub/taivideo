@@ -38,6 +38,11 @@ UA = (
 # ffmpeg tích hợp sẵn (Render không có ffmpeg hệ thống)
 FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
 
+# deno (cài lúc build trên Render vào thư mục .deno) để YouTube hoạt động
+DENO_BIN = Path(__file__).parent / ".deno" / "bin"
+if DENO_BIN.exists():
+    os.environ["PATH"] = str(DENO_BIN) + os.pathsep + os.environ.get("PATH", "")
+
 # Proxy tuỳ chọn (đặt biến môi trường PROXY_URL trên Render nếu IP bị chặn)
 PROXY_URL = os.environ.get("PROXY_URL", "").strip()
 
@@ -127,16 +132,20 @@ def analyze_url(raw_url: str) -> dict:
             ]
             return {"success": True, "title": title, "formats": formats}
     except Exception as e:
-        print("ANALYZE ERROR:", e)  # xem trong tab Logs của Render
-        # Bài đăng ảnh / slide: để gallery-dl xử lý lúc tải
-        return {
-            "success": True,
-            "title": "Bài đăng ảnh / Media",
-            "formats": [
-                {"id": "best", "label": "Chất lượng gốc tốt nhất"},
-                {"id": "images", "label": "Tải toàn bộ ảnh (ZIP)"},
-            ],
-        }
+        err = str(e)
+        print("ANALYZE ERROR:", err)  # xem trong tab Logs của Render
+        low = url.lower()
+        # Chỉ TikTok/Douyin mới có bài đăng ảnh/slide để gallery-dl xử lý
+        if "douyin.com" in low or "tiktok.com" in low:
+            return {
+                "success": True,
+                "title": "Bài đăng ảnh / Media (chưa đọc được thông tin video)",
+                "formats": [
+                    {"id": "best", "label": "Chất lượng gốc tốt nhất"},
+                    {"id": "images", "label": "Tải toàn bộ ảnh (ZIP)"},
+                ],
+            }
+        return {"success": False, "message": err[-300:]}
 
 
 def run_gallery_dl(url: str, task_dir: Path) -> str:
@@ -173,11 +182,17 @@ def download_media_file(raw_url: str, quality: str, task_dir: Path) -> tuple[Opt
         }]
     elif quality in {"720", "480", "360"}:
         h = int(quality)
-        opts["format"] = f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best"
+        opts["format"] = (
+            f"bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+            f"/bestvideo[height<={h}]+bestaudio/best[height<={h}]/best"
+        )
         opts["merge_output_format"] = "mp4"
     else:
-        # "1080" / "best": đừng ép ext=mp4 quá chặt, để fallback /best chạy được
-        opts["format"] = "bestvideo+bestaudio/best"
+        # Ưu tiên H.264 + AAC (phát được trên iPhone/Windows), rồi mới tới các codec khác
+        opts["format"] = (
+            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+            "/best[vcodec^=avc1]/bestvideo+bestaudio/best"
+        )
         opts["merge_output_format"] = "mp4"
 
     last_error = ""
@@ -202,6 +217,10 @@ def download_media_file(raw_url: str, quality: str, task_dir: Path) -> tuple[Opt
 
     if not files:
         return None, last_error or "Không tìm thấy luồng video/ảnh từ liên kết này."
+    if quality != "images":
+        media = [f for f in files if f.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov", ".mp3", ".m4a"}]
+        if media:
+            return max(media, key=lambda f: f.stat().st_size), ""
     if len(files) == 1:
         return files[0], ""
 
